@@ -32,6 +32,9 @@ public class B58 {
     }
 
     public String encodeToStringChecked(byte[] input, int version) {
+        return encodeToStringChecked(input, new byte[]{(byte) version});
+    }
+    public String encodeToStringChecked(byte[] input, byte[] version) {
         try {
             return new String(encodeToBytesChecked(input, version), "US-ASCII");
         } catch (UnsupportedEncodingException e) {
@@ -40,9 +43,13 @@ public class B58 {
     }
 
     public byte[] encodeToBytesChecked(byte[] input, int version) {
-        byte[] buffer = new byte[input.length + 1];
-        buffer[0] = (byte) version;
-        System.arraycopy(input, 0, buffer, 1, input.length);
+        return encodeToBytesChecked(input, new byte[]{(byte) version});
+    }
+
+    public byte[] encodeToBytesChecked(byte[] input, byte[] version) {
+        byte[] buffer = new byte[input.length + version.length];
+        System.arraycopy(version, 0, buffer, 0, version.length);
+        System.arraycopy(input, 0, buffer, version.length, input.length);
         byte[] checkSum = copyOfRange(HashUtils.doubleDigest(buffer), 0, 4);
         byte[] output = new byte[buffer.length + checkSum.length];
         System.arraycopy(buffer, 0, output, 0, buffer.length);
@@ -156,13 +163,48 @@ public class B58 {
      * @throws EncodingFormatException if the input is not baseFields 58 or the checksum does not validate.
      */
     public byte[] decodeChecked(String input, int version) throws EncodingFormatException {
-        byte buffer[] = decode(input);
-        if (buffer.length < 4)
-            throw new EncodingFormatException("Input too short");
+        byte[] buffer = decodeAndCheck(input);
+
         byte actualVersion = buffer[0];
         if (actualVersion != version) {
             throw new EncodingFormatException("Bro, version is wrong yo");
         }
+
+
+        return copyOfRange(buffer, 1, buffer.length - 4);
+    }
+
+    public byte[][] decodeMulti(String input,
+                              int expectedLength,
+                              byte[][] possibleVersions) throws EncodingFormatException {
+
+        byte[] buffer = decodeAndCheck(input);
+        int versionLength = buffer.length - 4 - expectedLength;
+        byte[] versionBytes = copyOfRange(buffer, 0, versionLength);
+
+        byte[] foundVersion = null;
+        for (byte[] possible : possibleVersions) {
+            if (Arrays.equals(possible, versionBytes)) {
+                foundVersion = possible;
+                break;
+            }
+        }
+        if (foundVersion == null) {
+            throw new EncodingFormatException("Bro, version is wrong yo");
+        }
+        byte[] bytes = copyOfRange(buffer, versionLength, buffer.length - 4);
+        byte[][] ret = new byte[2][];
+
+        ret[0] = foundVersion;
+        ret[1] = bytes;
+
+        return ret;
+    }
+
+    private byte[] decodeAndCheck(String input) {
+        byte buffer[] = decode(input);
+        if (buffer.length < 4)
+            throw new EncodingFormatException("Input too short");
 
         byte[] toHash = copyOfRange(buffer, 0, buffer.length - 4);
         byte[] hashed = copyOfRange(HashUtils.doubleDigest(toHash), 0, 4);
@@ -170,8 +212,7 @@ public class B58 {
 
         if (!Arrays.equals(checksum, hashed))
             throw new EncodingFormatException("Checksum does not validate");
-
-        return copyOfRange(buffer, 1, buffer.length - 4);
+        return buffer;
     }
 
     //

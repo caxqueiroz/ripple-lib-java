@@ -1,43 +1,72 @@
 package com.ripple.crypto.ecdsa;
 
+import com.ripple.encodings.B58IdentiferCodecs;
+import com.ripple.encodings.base58.B58;
 import com.ripple.utils.Sha512;
 import com.ripple.utils.Utils;
 
 import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
+import java.util.Arrays;
 
 import static com.ripple.config.Config.getB58IdentiferCodecs;
 
 public class Seed {
+    public static byte[] VER_K256 = new byte[]{(byte) B58IdentiferCodecs.VER_FAMILY_SEED};
+    public static byte[] VER_ED25519 = new byte[]{(byte) 0x1, (byte) 0xe1, (byte) 0x4b};
+
     final byte[] seedBytes;
     byte[] version;
 
     public Seed(byte[] seedBytes) {
+        this(VER_K256, seedBytes);
+    }
+    public Seed(byte[] version, byte[] seedBytes) {
         this.seedBytes = seedBytes;
+        this.version = version;
     }
 
     @Override
     public String toString() {
-        return getB58IdentiferCodecs().encodeFamilySeed(seedBytes);
+        B58 b58encoder = getB58IdentiferCodecs().b58;
+        return b58encoder.encodeToStringChecked(seedBytes, version);
     }
 
-    public byte[] getBytes() {
+    public byte[] bytes() {
         return seedBytes;
     }
 
-    public IKeyPair keyPair() {
-        return createKeyPair(seedBytes, 0);
+    public byte[] version() {
+        return version;
     }
+
+    public Seed setEd25519() {
+        this.version = VER_ED25519;
+        return this;
+    }
+
+    public IKeyPair keyPair() {
+        return keyPair(0);
+    }
+
     public IKeyPair rootKeyPair() {
-        return createKeyPair(seedBytes, -1);
+        return keyPair(-1);
     }
 
     public IKeyPair keyPair(int account) {
-        return createKeyPair(seedBytes, account);
+        if (Arrays.equals(version, VER_ED25519)) {
+            if (account != 0) throw new AssertionError();
+            return EDKeyPair.from128Seed(seedBytes);
+        }  else {
+            return createKeyPair(seedBytes, account);
+        }
+
     }
 
     public static Seed fromBase58(String b58) {
-        return new Seed(getB58IdentiferCodecs().decodeFamilySeed(b58));
+        B58 b58encoder = getB58IdentiferCodecs().b58;
+        byte[][] bytes = b58encoder.decodeMulti(b58, 16, new byte[][]{VER_K256, VER_ED25519});
+        return new Seed(bytes[0], bytes[1]);
     }
 
     public static Seed fromPassPhrase(String passPhrase) {
@@ -65,8 +94,7 @@ public class Seed {
         if (accountNumber == -1) {
             // The root keyPair
             return new K256KeyPair(privateGen, Utils.uBigInt(publicGenBytes));
-        }
-        else {
+        } else {
             secret = K256KeyPair.computeSecretKey(privateGen, publicGenBytes, accountNumber);
             pub = K256KeyPair.computePublicKey(secret);
             return new K256KeyPair(secret, pub);
