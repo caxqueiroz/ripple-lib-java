@@ -44,7 +44,7 @@ public class SeedTest {
         B58IdentiferCodecs b58 = Config.getB58IdentiferCodecs();
         Seed seed = Seed.fromPassPhrase("N4");
         IKeyPair rootPair = seed.rootKeyPair();
-        String s = b58.encodeNodePublic(rootPair.pubBytes());
+        String s = b58.encodeNodePublic(rootPair.canonicalPubBytes());
         assertEquals("n9JvnFJFCrdeRonKkuQHzE4VxT1QaG8Zo1VoG5okiTZ2S9B7ihsx", s);
     }
 
@@ -52,7 +52,7 @@ public class SeedTest {
     public void testCreateKeypairFromAccountNumber() {
         for (int i = 0; i < ADDRESS_ARRAY.length; i=i+ADDRESS_LINE_SIZE) {
             IKeyPair keyPair = Seed.fromPassPhrase(ADDRESS_ARRAY[i]).keyPair(Integer.valueOf(ADDRESS_ARRAY[i+2]));
-            assertEquals(ADDRESS_ARRAY[i+3], keyPair.pubHex());
+            assertEquals(ADDRESS_ARRAY[i+3], keyPair.canonicalPubHex());
         }
     }
     private static String phraseToFamilySeed(String passphrase) {
